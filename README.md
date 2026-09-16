@@ -4,13 +4,12 @@
 
 # Kimai on StartOS
 
-> **Upstream docs:** <https://www.kimai.org/documentation/>
->
 > Everything not listed in this document should behave the same as upstream
-> Kimai. If a feature, setting, or behavior is not mentioned here, the upstream
-> documentation is accurate and fully applicable.
+> Kimai. If a feature, setting, or behavior is not mentioned here, the
+> upstream documentation is accurate and fully applicable — see the
+> Documentation section of `instructions.md` for links.
 
-[Kimai](https://github.com/kimai/kimai) is a self-hosted time-tracking application for freelancers, agencies, and companies. This package runs the official Apache image alongside a MySQL sidecar, provisions the initial super-admin, and wires Kimai's mailer into StartOS's SMTP settings.
+[Kimai](https://github.com/kimai/kimai) is a self-hosted time-tracking application for freelancers, agencies, and companies. This package runs the official Apache image alongside a MySQL sidecar, provisions the `admin` super-admin from a StartOS action, and wires Kimai's mailer into StartOS's SMTP settings.
 
 ---
 
@@ -18,159 +17,125 @@
 
 - [Image and Container Runtime](#image-and-container-runtime)
 - [Volume and Data Layout](#volume-and-data-layout)
-- [Installation and First-Run Flow](#installation-and-first-run-flow)
-- [Configuration Management](#configuration-management)
-- [Network Access and Interfaces](#network-access-and-interfaces)
-- [Actions (StartOS UI)](#actions-startos-ui)
-- [Backups and Restore](#backups-and-restore)
-- [Health Checks](#health-checks)
+- [File Models](#file-models)
 - [Dependencies](#dependencies)
+- [Network Access and Interfaces](#network-access-and-interfaces)
+- [Installation and First-Run Flow](#installation-and-first-run-flow)
+- [Actions](#actions)
+- [Tasks](#tasks)
+- [Health Checks](#health-checks)
+- [Backups and Restore](#backups-and-restore)
 - [Limitations and Differences](#limitations-and-differences)
-- [What Is Unchanged from Upstream](#what-is-unchanged-from-upstream)
-- [Contributing](#contributing)
 - [Quick Reference for AI Consumers](#quick-reference-for-ai-consumers)
 
 ---
 
 ## Image and Container Runtime
 
-| | |
-| --- | --- |
-| Kimai image | Upstream `kimai/kimai2`, unmodified |
-| MySQL image | Upstream `mysql`, unmodified |
-| Architectures | `x86_64`, `aarch64` |
-| Entrypoint | Both images use `sdk.useEntrypoint()` |
+Two upstream images, both unmodified, sharing one network namespace so Kimai reaches MySQL over `127.0.0.1`.
 
-The Kimai image is published in two flavors under different tags. This package pins the **Apache** flavor, which bundles its own web server listening on port 8001. The `latest`/`fpm` tags are PHP-FPM only and would require an additional nginx sidecar; they are deliberately not used.
+| Subcontainer | Image           | Purpose                                                        |
+| ------------ | --------------- | -------------------------------------------------------------- |
+| `kimai-sub`  | `kimai/kimai2`  | Kimai's entrypoint: waits for the database, runs `kimai:install` (schema creation and migrations), then Apache in the foreground |
+| `mysql-sub`  | `mysql`         | MySQL, bound to loopback only                                  |
 
-Kimai's entrypoint waits for the database, runs `kimai:install` (schema creation and migrations, idempotent), then execs Apache in the foreground. That behavior is unchanged — this package only supplies its environment.
+Both run for `x86_64` and `aarch64` with their default entrypoints. The Kimai image is pinned to its **Apache** build (the bare version tag); the `latest`/`fpm` tags are PHP-FPM only and would need a web-server sidecar.
 
 ## Volume and Data Layout
 
-| Volume | Mount point | Contents |
-| --- | --- | --- |
-| `main` | `/opt/kimai/var` | Invoices, exports, invoice/export templates, plugins, the generated app secret, the admin-credentials marker, logs |
-| `mysql` | `/var/lib/mysql` | MySQL data directory |
-| `startos` | — | `store.json`: generated secrets and SMTP settings |
+Three volumes, one of which is never mounted into a container.
 
-The upstream Docker Compose example mounts only `var/data` and `var/plugins`. This package mounts the whole `/opt/kimai/var` directory instead, which is what the image itself declares as a `VOLUME`. The narrower mount silently discards generated invoices, exports, and custom templates on restart.
+| Volume    | Mount point      | Contents                                                                     |
+| --------- | ---------------- | ---------------------------------------------------------------------------- |
+| `main`    | `/opt/kimai/var` | Invoices, exports, invoice/export templates, plugins, sessions, logs         |
+| `mysql`   | `/var/lib/mysql` | MySQL data directory                                                         |
+| `startos` | —                | `store.json`, read by the package on the host side                           |
 
-Both subcontainers share a network namespace, so Kimai reaches MySQL over `127.0.0.1`.
+The upstream Docker Compose example mounts only `var/data` and `var/plugins`; this package mounts all of `/opt/kimai/var` — the directory the image declares as its `VOLUME` — because rendered invoices, exports and custom templates live in its other subdirectories and would otherwise vanish on restart.
 
-## Installation and First-Run Flow
+## File Models
 
-1. On install, the package generates a MySQL root password and Symfony `APP_SECRET` into `store.json`.
-2. A **critical task** is raised pointing at the **Set Admin Password** action. Kimai ships with no accounts, so this must be run before anyone can sign in.
-3. On first start, MySQL initializes its data directory and Kimai's entrypoint builds the schema. This is the slow part — several minutes is normal.
-4. Once Kimai is healthy, an `apply-admin-credentials` oneshot runs `kimai:user:create`, falling back to `kimai:user:password`, to provision or update the `admin` super-admin. It runs only when the credentials have changed since the last successful apply.
+One, on the `startos` volume.
 
-Upstream's `ADMINPASS`/`ADMINMAIL` variables are deliberately **not** used. They only feed `kimai:user:create`, which fails once the account exists — enough to set a password, never to rotate one. The oneshot covers both cases with a single code path.
+| Model       | File         | Contents                                                                                |
+| ----------- | ------------ | --------------------------------------------------------------------------------------- |
+| `storeJson` | `store.json` | `dbPassword`, `appSecret` (generated at install), `adminPassword` (set by an action), `smtp` (set by an action) |
 
-The oneshot is guarded rather than unconditional. It hashes the credentials it is about to apply and records that hash in `var/data/.startos-admin-applied`; on a later start where the hash still matches, it exits without touching Kimai. Applying on every start would be destructive whenever the database already holds an `admin` this package did not create — after importing another instance's data, or restoring a backup taken elsewhere — because it would silently reset that account's password on the next restart. The marker lives on the `main` volume, so a backup and its restore carry it alongside the `store.json` that holds the password, and the two stay in agreement.
+Kimai itself is configured entirely through environment variables that the package derives from `store.json` on every start: `DATABASE_URL`, `APP_SECRET`, `APP_ENV`, `TRUSTED_PROXIES`, `MAILER_URL` and `MAILER_FROM`. Nothing is written into Kimai's own config tree, and everything inside Kimai's admin UI — users, teams, customers, projects, rates, templates, plugins — belongs to the user and is never touched by the package.
 
-If the `admin` account is ever deleted from inside Kimai, run **Set Admin Password** again: a new password produces a new hash, which makes the oneshot re-create the account on the next start.
-
-Installs upgrading from `2.66.0:1` or earlier have no marker yet, so the first start after the upgrade applies the stored password once more and writes the marker. Every start after that leaves the account alone. This is deliberate: seeding the marker from a version migration would mean writing a credential hash from a runtime this package cannot test against, and a migration that throws blocks the upgrade outright.
-
-The admin account is created with the non-routable address `admin@kimai.local`. Kimai requires an email-shaped value; nothing is ever sent to it. Change it inside Kimai if you want password-reset emails to reach you.
-
-## Configuration Management
-
-| StartOS-Managed | Upstream-Managed |
-| --- | --- |
-| `DATABASE_URL`, `APP_SECRET`, `APP_ENV`, `TRUSTED_PROXIES`, `MAILER_URL`, `MAILER_FROM` | Everything inside Kimai's own admin UI: users, teams, customers, projects, activities, rates, invoice and export templates, plugins |
-
-`TRUSTED_PROXIES` is set to the private address ranges. StartOS terminates TLS at the edge and forwards plain HTTP with `X-Forwarded-Proto: https`; Symfony ignores those headers unless the sender is a trusted proxy, and if it ignores them Kimai emits absolute `http://` URLs that the browser blocks as mixed content.
-
-`TRUSTED_HOSTS` is intentionally left unset (Symfony's default: allow any host). StartOS serves each service on several addresses at once — `.local`, LAN IP, and any address the user adds — and pinning a single hostname would break every other one.
-
-## Network Access and Interfaces
-
-| Interface | Internal port | Protocol | Purpose |
-| --- | --- | --- | --- |
-| Web Interface (`ui`) | 8001 | HTTP | Kimai's web UI and its REST API (under `/api`) |
-
-The interface is bound with `protocol: 'http'`, so StartOS adds `X-Forwarded-*` headers and terminates TLS itself. Which addresses it is reachable on is the user's choice, made from the service's Interfaces tab.
-
-## Actions (StartOS UI)
-
-### Set Admin Password (`set-admin-password`)
-
-- **Purpose**: Generates a random 22-character password for the `admin` account, stores it, and returns it once. Covers both the initial credential and later rotation.
-- **Visibility**: Enabled
-- **Availability**: Any status
-- **Inputs**: None
-- **Outputs**: Username and password (password masked and copyable)
-
-Writing the password to `store.json` re-runs `setupMain`, which restarts the daemons and re-runs the oneshot that pushes the new password into Kimai.
-
-### Configure SMTP (`configure-smtp`)
-
-- **Purpose**: Sets Kimai's mailer. Supports disabled, StartOS system SMTP, and custom providers.
-- **Visibility**: Enabled
-- **Availability**: Any status
-- **Inputs**: The SDK's standard SMTP input spec
-- **Outputs**: None
-
-The stored selection is rendered into a Symfony Mailer DSN for `MAILER_URL` — `smtps://` for implicit TLS, `smtp://` for STARTTLS, `null://null` when disabled. Credentials are percent-encoded.
-
-## Backups and Restore
-
-The database is backed up as a **logical dump** (`sdk.Backups.withMysqlDump`), not as a copy of the MySQL data directory — a raw datadir is only restorable by the exact server version that wrote it, while a dump survives an upstream MySQL bump.
-
-Also included:
-
-- `main` — invoices, exports, custom templates, plugins
-- `startos` — `store.json`, which holds the database password the restore needs to load the dump back in
-
-The `mysql` volume itself is not copied; it is rebuilt from the dump on restore.
-
-### The restored datadir has a different account layout
-
-A restore does not produce the same MySQL state as a fresh install, and the difference is load-bearing.
-
-On a fresh install the image's entrypoint initializes the datadir and creates **`root@%`**, honouring `MYSQL_ROOT_HOST` (default `%`). On a restore, `sdk.Backups.withMysqlDump` builds the datadir itself and loads the dump into it, so the entrypoint finds a populated datadir and skips user setup entirely. The only account that exists is **`root@localhost`**, which is reachable over the unix socket but *not* over TCP.
-
-Kimai connects over TCP to `127.0.0.1`. Left alone, a restore therefore comes up with the data fully intact and the service permanently stuck, failing with `ERROR 1130 (HY000): Host '127.0.0.1' is not allowed to connect to this MySQL server` — visible only by attaching to the container.
-
-Two things in `main.ts` handle this:
-
-1. The `mysql` daemon's readiness check connects over the **socket**. A TCP check could never pass on a restored datadir, and since `kimai` is gated on that check, the whole service would hang.
-2. The **`ensure-db-access`** oneshot runs after the database is ready and before Kimai starts, creating `root@%` if it is missing. It is a no-op on a fresh install and a repair on a restored one, and the `kimai` daemon lists it in `requires`.
-
-This was found by testing an actual restore, and the fix was verified by a second one; neither is theoretical. The underlying asymmetry arguably belongs in the SDK, but the package cannot depend on that.
-
-> [!IMPORTANT]
-> A restore reinstalls the package version recorded in the backup, not the version currently installed. Testing any packaging fix through a restore therefore requires a backup taken *after* that fix is installed — restoring an older backup replays the older code and reproduces the old behaviour.
-
-## Health Checks
-
-| Check | Displayed as | Behavior |
-| --- | --- | --- |
-| `mysql` daemon | Database | Runs `SELECT 1` over the **unix socket**, not TCP — see [Backups and Restore](#backups-and-restore) for why. Reports `loading` while initializing, distinguishing a brand-new datadir from a restart. |
-| `kimai` daemon | Web Interface | `checkPortListening` on the UI port, with a 5-minute grace period. Apache only binds after migrations finish, so a shorter grace period would flash red during legitimate work. |
-| `email` | Email | Reports `disabled` with a pointer to the Configure SMTP action when no mailer is set, `success` otherwise. |
+`TRUSTED_PROXIES` is set to the private address ranges so Symfony honours the `X-Forwarded-Proto: https` header the StartOS reverse proxy adds; without it Kimai emits absolute `http://` URLs that the browser blocks as mixed content. `TRUSTED_HOSTS` is deliberately unset — StartOS serves the service on several addresses at once and pinning one would break the others.
 
 ## Dependencies
 
 None.
 
+## Network Access and Interfaces
+
+One HTTP interface serving both the web UI and Kimai's REST API.
+
+| Interface | Id   | Type | Internal port | Serves                                   |
+| --------- | ---- | ---- | ------------- | ---------------------------------------- |
+| Web Interface | `ui` | ui | 8001        | Kimai's web UI, and its REST API under `/api` |
+
+The port is bound on the `ui-multi` host with `protocol: 'http'`, so StartOS terminates TLS and adds the `X-Forwarded-*` headers.
+
+## Installation and First-Run Flow
+
+Install generates the MySQL root password and Symfony `APP_SECRET` into `store.json`, then holds the service on a critical task until an admin password exists — Kimai ships with no accounts, and its own first-run path (`ADMINPASS`/`ADMINMAIL`) can create an account but never rotate one, so it is not used.
+
+On every start:
+
+1. MySQL comes up (on the first start it initializes its data directory — several minutes is normal) and the `ensure-db-access` oneshot grants `root@%`, which a restored data directory lacks (see [Backups and Restore](#backups-and-restore)).
+2. Kimai's entrypoint runs `kimai:install`, applying any pending schema migrations, then starts Apache.
+3. The `apply-admin-credentials` oneshot runs `kimai:user:create --ignore-existing` followed by `kimai:user:password`, so the `admin` super-admin exists and carries the password in `store.json`. **The package owns this account's password**: a change made inside Kimai reverts on the next start, and rotation goes through the Set Admin Password action.
+
+The account is created with the placeholder address `admin@kimai.local`; nothing is ever sent to it, and the user is told to change it inside Kimai.
+
+## Actions
+
+Two, both user-facing. Either one rewrites `store.json`, which restarts the service if it is running.
+
+| Action               | When to run it                                       | Cost / repeat safety                                                                 | State changed                       |
+| -------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------- |
+| `set-admin-password` | First setup (raised as a task), a lost password, or rotation | Restarts the service (about a minute); each run invalidates the previous password; safe to repeat | `adminPassword` in `store.json`, then the `admin` row in MySQL on the next start |
+| `configure-smtp`     | Kimai should send password resets, invoices or reports | Restarts the service (about a minute); safe to repeat                              | `smtp` in `store.json`, rendered into `MAILER_URL`/`MAILER_FROM` |
+
+`set-admin-password` returns the username and the new password once; it is not readable afterwards. `configure-smtp` renders the stored selection into a Symfony Mailer DSN — `smtps://` for implicit TLS, `smtp://` for STARTTLS, `null://null` when disabled — with credentials percent-encoded.
+
+## Tasks
+
+One.
+
+| Task                 | Severity   | Raised when                             | Cleared by                                  |
+| -------------------- | ---------- | --------------------------------------- | ------------------------------------------- |
+| `set-admin-password` | `critical` | `store.json` holds no `adminPassword` — on install, or after a restore of a backup taken before one was set | Running the action; it does not return once a password is stored |
+
+While it is raised the service cannot be started and its ordinary controls are hidden.
+
+## Health Checks
+
+Three.
+
+| Check   | Displayed as  | Probes                                                                          | A failure means                                                                                                                              |
+| ------- | ------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mysql` | Database      | `SELECT 1` over the unix socket                                                 | `loading` while the data directory initializes (first start) or the server starts; a persistent failure is in the `mysql-sub` logs           |
+| `kimai` | Web Interface | Port 8001 listening, with a 5-minute grace period                                | Apache only binds after `kimai:install` finishes, so "starting" during the first minutes is migrations running; past the grace period, read the `kimai-sub` log for the migration or database error |
+| `email` | Email         | Whether an SMTP configuration is stored                                          | `disabled` is informational: no mailer is configured and Kimai's email features silently do nothing until Configure SMTP is run              |
+
+## Backups and Restore
+
+The database is **dumped, not copied**: `sdk.Backups.withMysqlDump` writes a logical dump before the backup and replays it into a freshly initialized data directory on restore, so the `mysql` volume's files are never captured and a restore survives a MySQL upgrade. The `main` volume (invoices, exports, templates, plugins) and the `startos` volume (`store.json`, whose `dbPassword` the restore uses to load the dump) are copied wholesale.
+
+A restored data directory differs from a fresh one: the SDK's restore creates only `root@localhost`, reachable over the socket, while Kimai connects over TCP to `127.0.0.1`. The `mysql` readiness check therefore probes the socket, and the `ensure-db-access` oneshot recreates `root@%` before Kimai starts — a no-op on a fresh install. The restored instance needs nothing else: the admin password and SMTP settings come back with `store.json`.
+
 ## Limitations and Differences
 
-1. **`DEFAULT_URI` cannot be set.** The image's Apache vhost passes a fixed list of environment variables through to PHP (`.docker/000-default.conf`), and `DEFAULT_URI` is not on it. It only affects absolute URLs built outside a web request (some CLI-generated links); URLs generated while serving a request use the real request context and are correct.
-2. **`TRUSTED_HOSTS` is not set**, by design — see [Configuration Management](#configuration-management). Host-header validation is therefore not enforced at the application layer.
-3. **The database password must stay alphanumeric.** Kimai's entrypoint recovers connection details from `DATABASE_URL` with `awk -F '[/:@]'`, so a password containing `/`, `:`, `@`, or `?` breaks the database wait loop rather than failing loudly. Generation is constrained accordingly.
-4. **The admin account uses a placeholder email address** (`admin@kimai.local`) that cannot receive mail.
-5. **The database password appears in the service logs.** The image's entrypoint runs under `bash -x`, so every command it executes is traced — including the `awk` calls that parse `DATABASE_URL`. Upstream suppresses tracing around `APP_SECRET` but not around the database credentials. The account is loopback-bound and internal to the service, so the exposure is to anyone who can already read the service's logs, but be aware of it before sharing a log dump.
-6. **LDAP and SAML are not configured** by this package, though the image ships support for them.
-
-## What Is Unchanged from Upstream
-
-Time tracking, timesheets and quick-entry, customers/projects/activities, teams and permissions, hourly and fixed rates, budgets, invoicing and invoice templates, exports (CSV, XLSX, PDF, DOCX), reporting, the REST API, two-factor authentication, plugins, and Kimai's own localization all behave exactly as the upstream documentation describes.
-
-## Contributing
-
-See [AGENTS.md](AGENTS.md).
+1. **The `admin` password is owned by StartOS.** It is re-applied on every start; change it with the Set Admin Password action, not inside Kimai. Other users' passwords are Kimai's own.
+2. **The `admin` account's email is the placeholder `admin@kimai.local`** until changed inside Kimai, so password-reset mail for it goes nowhere.
+3. **`DEFAULT_URI` cannot be set.** The image's Apache vhost passes a fixed list of variables through to PHP and this is not on it; only absolute URLs built outside a web request (some CLI-generated links) are affected.
+4. **`TRUSTED_HOSTS` is not set**, so host-header validation is not enforced at the application layer.
+5. **The database password is alphanumeric by construction**, because the image's entrypoint splits `DATABASE_URL` on `/`, `:` and `@`.
+6. **LDAP and SAML are not configured** by the package, though the image ships support for them.
 
 ---
 
@@ -178,14 +143,15 @@ See [AGENTS.md](AGENTS.md).
 
 ```yaml
 package_id: kimai
+image: kimai/kimai2, mysql
 architectures: [x86_64, aarch64]
+subcontainers: [kimai-sub, mysql-sub]
 volumes:
   main: /opt/kimai/var
   mysql: /var/lib/mysql
-  startos: store.json
-ports:
-  ui: 8001
-dependencies: none
+  startos: not mounted (store.json)
+file_models:
+  - store.json
 startos_managed_env_vars:
   - APP_ENV
   - APP_SECRET
@@ -193,7 +159,18 @@ startos_managed_env_vars:
   - TRUSTED_PROXIES
   - MAILER_URL
   - MAILER_FROM
+  - MYSQL_ROOT_PASSWORD
+  - MYSQL_DATABASE
+dependencies: none
+interfaces:
+  ui: { type: ui, port: 8001 }
 actions:
   - set-admin-password
   - configure-smtp
+tasks:
+  - { action: set-admin-password, severity: critical }
+health_checks:
+  - mysql
+  - kimai
+  - email
 ```

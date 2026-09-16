@@ -2,45 +2,27 @@
 
 ## Documentation
 
-- [Kimai documentation](https://www.kimai.org/documentation/) — the upstream user and administration guide.
-- [Getting started](https://www.kimai.org/documentation/getting-started.html) — customers, projects, and activities, and how they fit together.
-- [Invoices](https://www.kimai.org/documentation/invoices.html) — turning recorded time into invoices and building templates.
-- [REST API](https://www.kimai.org/documentation/rest-api.html) — the API reference for scripting and integrations.
+- [Kimai documentation](https://www.kimai.org/documentation/) — the upstream user and administration guide, including getting started, invoices and the REST API.
 
 ## What you get on StartOS
 
-Kimai and its database run together as one service — there is nothing separate to install or connect. The package exposes a single web interface serving both Kimai's UI and its REST API, generates the initial super-admin for you, and can route Kimai's outgoing email through your StartOS SMTP settings.
-
-Your timesheets and configuration live in the database; invoices, exports, and any custom invoice or export templates you upload are kept on disk. All of it is included in StartOS backups.
+Kimai and its database run together as one service. The Web Interface serves both Kimai's UI and its REST API, the `admin` account is created for you, and Kimai's outgoing email can be routed through your StartOS SMTP settings or a provider of your own. Timesheets, invoices, exports and custom templates are all included in StartOS backups.
 
 ## Getting set up
 
-1. Run the **Set Admin Password** action. Kimai starts with no accounts, so StartOS asks you to do this before anything else. Copy the username and password it returns — the password is shown only once.
-2. Start Kimai. The first start builds the database and applies migrations; it can take several minutes, and the Web Interface check will read as starting until it finishes.
-3. Open the web interface and sign in as `admin` with the password from step 1.
-4. In Kimai, open **User** → your profile and set a real email address. The account is created with a placeholder address that cannot receive mail, so password-reset emails would go nowhere.
-5. Create your first customer, then a project under it, then an activity. Kimai needs all three before you can record time.
+1. Run the **Set Admin Password** action. Kimai starts with no accounts, so StartOS asks you to do this first. Copy the username and password it returns — the password is shown only once.
+2. Start Kimai. The first start builds the database and can take several minutes; the Web Interface check reads as starting until it finishes.
+3. Open the **Web Interface** and sign in as `admin` with the password from step 1. Kimai offers a short setup wizard; you can step through it or skip it.
+4. In Kimai, open your user profile and set a real email address. The account is created with a placeholder address, so password-reset emails for it would go nowhere.
+5. Create a customer, then a project under it, then an activity. Kimai needs all three before you can record time.
 
 ## Using Kimai
 
 ### Web interface
 
-The first time you sign in, Kimai opens a short setup wizard that walks you through customizing it to your needs. You can step through it or skip it; it does not need to be completed for Kimai to work.
+The dashboard timer records time against a project and activity. Timesheets, customers, projects, invoices, exports, reporting and user administration are in the sidebar. The same address serves the REST API under `/api`; create an API token from your user profile.
 
-After that you land on the dashboard, where the timer at the top starts and stops recording against a project and activity. Everything else — timesheets, customers, projects, invoices, exports, reporting, and user administration — is reachable from the sidebar.
+### Actions
 
-The same address also serves Kimai's REST API under `/api`. Create API access from your user profile inside Kimai.
-
-### Set Admin Password
-
-Generates a fresh random password for the `admin` account and shows it to you once. Use it to rotate the password later, or if you lose it. If Kimai is running it restarts to apply the change, which takes a few moments.
-
-This only affects `admin`. Other users' passwords are managed inside Kimai.
-
-### Configure SMTP
-
-Lets Kimai send email — password resets, invoices, and scheduled reports. Choose your StartOS system SMTP settings or enter a custom provider. Until you do, the Email health check reads as disabled and those features silently do nothing.
-
-## Limitations
-
-The `admin` account is created with a placeholder email address (`admin@kimai.local`) that cannot receive mail. Change it in Kimai before relying on password-reset emails.
+- **Set Admin Password** — generates a fresh password for `admin` and shows it once. Use it if you lose the password or want to rotate it. Kimai restarts to apply the change. The password of `admin` is managed here, not inside Kimai: a change made in Kimai's own profile page reverts the next time the service starts. Other users' passwords are managed inside Kimai.
+- **Configure SMTP** — lets Kimai send password resets, invoices and scheduled reports through your StartOS system SMTP settings or a custom provider. Until you do, the Email health check reads as disabled and those features do nothing.

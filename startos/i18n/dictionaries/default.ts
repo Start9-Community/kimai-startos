@@ -25,6 +25,7 @@ const dict = {
   'Generate a new random password for the Kimai admin account. Replaces the existing password.': 14,
   'Login Credentials': 15,
   'Use these credentials to sign in to Kimai. If Kimai is running it will restart to apply them; this takes a few moments.': 16,
+  'Replaces the current admin password. Kimai restarts to apply it.': 21,
   Username: 17,
   Password: 18,
 

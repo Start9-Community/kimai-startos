@@ -12,8 +12,26 @@ admin credentials", "expose a web UI") to the constructs, the reference pages, a
 package to copy. Find the recipe before you read this package's neighbours: a package you reach by
 grepping may be non-conformant, and the recipe outranks it.
 
-Work this package's `TODO.md` from top to bottom. Keep `README.md` (architecture, for developers and LLMs) and `instructions.md` (end-user docs) in sync with your changes.
+Freshly scaffolded? Work the
+[New Package Checklist](../start-technologies/projects/start-sdk/docs/src/new-package-checklist.md)
+(or <https://docs.start9.com/packaging/new-package-checklist.html>) from top to bottom. It is a
+guide page, not a file in this repo — read it, don't copy it in.
 
-## Inspecting a running install
+Keep `README.md` (technical reference for an AI support or administering agent) and
+`instructions.md` (end-user docs) in sync with your changes.
 
-To run a command inside a service's container (read its generated config, grep app logs), use `start-cli package attach <id> -n <subcontainer-name> -- <cmd>`. Select the subcontainer by **name** with `-n` (the name passed to `SubContainer.of` in `main.ts`, e.g. `-n web`) or by image with `-i`. Note: `-s/--subcontainer` matches the internal **Guid**, not the name, so passing a name to `-s` fails with "no matching subcontainers". A service with more than one subcontainer requires a selector; with none given, `attach` falls back to an interactive picker that panics in a non-TTY shell — that's the missing selector, not a TTY requirement.
+**Fix a defect you spot rather than reporting it** — you have the package open and the
+context to be sure. File **a GitHub issue on this repo** only when the call isn't yours to
+make: you can't pin the cause down, two defensible fixes exist, or it's too large to ride on
+the work in hand. An open issue is a report, not a queue — implement one when you're asked
+to or when it's labelled `Approved`, then close it with `Closes #<n>`.
+
+Don't record work in the repo instead: no `TODO.md`, no `NOTES.md`, no `PLAN.md`. What you
+verified, tried, and decided belongs in the commit message and the PR body.
+
+## This repo
+
+- **Pin the bare `kimai/kimai2:<version>` tag.** It is the Apache build (same digest as `apache`); `latest` and `fpm` are PHP-FPM with no web server. Confirm the digest still matches `apache` after a bump.
+- **`DB_SERVER_VERSION` in `startos/utils.ts` must equal the `mysql` image tag.** Doctrine picks its SQL platform from it and a mismatch produces wrong DDL, not an error.
+- **The generated database password stays alphanumeric.** The image's entrypoint recovers the connection details from `DATABASE_URL` with `awk -F '[/:@]'`, so a punctuation character breaks the wait loop silently.
+- **Keep the `mysql` readiness check on the socket and `ensure-db-access` between it and `kimai`.** The SDK's mysqldump restore creates only `root@localhost`; a TCP check never passes on a restored datadir and the service hangs.
