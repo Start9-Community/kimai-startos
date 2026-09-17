@@ -23,6 +23,7 @@ export default {
     18: 'Contraseña',
     19: 'Configurar SMTP',
     20: 'Añade credenciales SMTP para que Kimai pueda enviar correos de restablecimiento de contraseña, facturas e informes.',
+    21: 'Sustituye la contraseña actual de administrador. Kimai se reinicia para aplicarla.',
   },
   de_DE: {
     0: 'Starte Kimai!',
@@ -46,6 +47,7 @@ export default {
     18: 'Passwort',
     19: 'SMTP konfigurieren',
     20: 'SMTP-Zugangsdaten hinterlegen, damit Kimai E-Mails zum Zurücksetzen von Passwörtern, Rechnungen und Berichte versenden kann.',
+    21: 'Ersetzt das aktuelle Administrator-Passwort. Kimai startet neu, um es zu übernehmen.',
   },
   pl_PL: {
     0: 'Uruchamianie Kimai!',
@@ -69,6 +71,7 @@ export default {
     18: 'Hasło',
     19: 'Konfiguruj SMTP',
     20: 'Dodaj dane SMTP, aby Kimai mógł wysyłać wiadomości resetujące hasło, faktury i raporty.',
+    21: 'Zastępuje obecne hasło administratora. Kimai restartuje się, aby je zastosować.',
   },
   fr_FR: {
     0: 'Démarrage de Kimai !',
@@ -92,5 +95,6 @@ export default {
     18: 'Mot de passe',
     19: 'Configurer SMTP',
     20: 'Ajoutez des identifiants SMTP pour que Kimai puisse envoyer des courriels de réinitialisation de mot de passe, des factures et des rapports.',
+    21: "Remplace le mot de passe administrateur actuel. Kimai redémarre pour l'appliquer.",
   },
 } satisfies Record<string, LangDict>

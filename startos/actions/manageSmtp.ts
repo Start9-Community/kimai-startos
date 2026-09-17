@@ -9,11 +9,6 @@ export const inputSpec = InputSpec.of({
   smtp: sdk.inputSpecConstants.smtpInputSpec,
 })
 
-/**
- * Kimai uses email for password resets, invoice delivery, and scheduled
- * reports. With SMTP disabled it writes a `null://` mailer DSN and those
- * features silently do nothing, which the "Email" health check reports.
- */
 export const manageSmtp = sdk.Action.withInput(
   'configure-smtp',
 
@@ -30,7 +25,7 @@ export const manageSmtp = sdk.Action.withInput(
 
   inputSpec,
 
-  async ({ effects }) => ({
+  async () => ({
     smtp: smtpPrefill(await storeJson.read((s) => s.smtp).once()),
   }),
 
