@@ -18,7 +18,10 @@ Freshly scaffolded? Work the
 guide page, not a file in this repo — read it, don't copy it in.
 
 Keep `README.md` (technical reference for an AI support or administering agent) and
-`instructions.md` (end-user docs) in sync with your changes.
+`instructions.md` (end-user docs) in sync with your changes. This file restates neither:
+whoever changes the package has both, so it carries only what they don't — repo mechanics,
+a change that looks right and is not, where the next thing gets added, a naming trap, a
+build or test invocation particular to this repo.
 
 **Fix a defect you spot rather than reporting it** — you have the package open and the
 context to be sure. File **a GitHub issue on this repo** only when the call isn't yours to
@@ -31,7 +34,7 @@ verified, tried, and decided belongs in the commit message and the PR body.
 
 ## This repo
 
-- **Pin the bare `kimai/kimai2:<version>` tag.** It is the Apache build (same digest as `apache`); `latest` and `fpm` are PHP-FPM with no web server. Confirm the digest still matches `apache` after a bump.
+- **Pin the bare `kimai/kimai2:<version>` tag, never `latest` or `fpm`** — those are PHP-FPM builds with no web server.
 - **`DB_SERVER_VERSION` in `startos/utils.ts` must equal the `mysql` image tag.** Doctrine picks its SQL platform from it and a mismatch produces wrong DDL, not an error.
-- **The generated database password stays alphanumeric.** The image's entrypoint recovers the connection details from `DATABASE_URL` with `awk -F '[/:@]'`, so a punctuation character breaks the wait loop silently.
-- **Keep the `mysql` readiness check on the socket and `ensure-db-access` between it and `kimai`.** The SDK's mysqldump restore creates only `root@localhost`; a TCP check never passes on a restored datadir and the service hangs.
+- **Keep the generated database password alphanumeric** — the image's entrypoint splits `DATABASE_URL` on `/`, `:` and `@`, and a punctuation character breaks its wait loop silently.
+- **Keep the `mysql` readiness check on the socket and `ensure-db-access` between it and `kimai`** — a restored datadir has only `root@localhost`, so a TCP check never passes and the service hangs.
