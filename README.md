@@ -98,7 +98,7 @@ Two, both user-facing. Either one rewrites `store.json`, which restarts the serv
 | Action               | When to run it                                       | Cost / repeat safety                                                                 | State changed                       |
 | -------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------- |
 | `set-admin-password` | First setup (raised as a task), a lost password, or rotation | Restarts the service (about a minute); each run invalidates the previous password; safe to repeat | `adminPassword` in `store.json`, then the `admin` row in MySQL on the next start |
-| `configure-smtp`     | Kimai should send password resets, invoices or reports | Restarts the service (about a minute); safe to repeat                              | `smtp` in `store.json`, rendered into `MAILER_URL`/`MAILER_FROM` |
+| `configure-smtp`     | Kimai should send invoices or reports | Restarts the service (about a minute); safe to repeat                              | `smtp` in `store.json`, rendered into `MAILER_URL`/`MAILER_FROM` |
 
 `set-admin-password` returns the username and the new password once; it is not readable afterwards. `configure-smtp` renders the stored selection into a Symfony Mailer DSN — `smtps://` for implicit TLS, `smtp://` for STARTTLS, `null://null` when disabled — with credentials percent-encoded.
 
@@ -131,9 +131,9 @@ A restored data directory differs from a fresh one: the SDK's restore creates on
 ## Limitations and Differences
 
 1. **The `admin` password is owned by StartOS.** It is re-applied on every start; change it with the Set Admin Password action, not inside Kimai. Other users' passwords are Kimai's own.
-2. **The `admin` account's email is the placeholder `admin@kimai.local`** until changed inside Kimai, so password-reset mail for it goes nowhere.
+2. **The `admin` account's email is the placeholder `admin@kimai.local`** until changed inside Kimai.
 3. **`DEFAULT_URI` cannot be set.** The image's Apache vhost passes a fixed list of variables through to PHP and this is not on it; only absolute URLs built outside a web request (some CLI-generated links) are affected.
-4. **`TRUSTED_HOSTS` is not set**, so host-header validation is not enforced at the application layer.
+4. **`TRUSTED_HOSTS` is not set**, so host-header validation is not enforced at the application layer and Kimai disables self-service password-reset email even when SMTP is configured. The reset request returns HTTP 503. Recover `admin` with Set Admin Password; other users must contact a Kimai administrator.
 5. **The database password is alphanumeric by construction**, because the image's entrypoint splits `DATABASE_URL` on `/`, `:` and `@`.
 6. **LDAP and SAML are not configured** by the package, though the image ships support for them.
 

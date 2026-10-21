@@ -167,7 +167,7 @@ export const main = sdk.setupMain(async ({ effects }) => {
               : {
                   result: 'disabled',
                   message: i18n(
-                    'No SMTP server configured. Kimai cannot send password-reset emails, invoices, or reports. Use the "Configure SMTP" action to enable it.',
+                    'No SMTP server configured. Kimai cannot send invoices or reports. Use the "Configure SMTP" action to enable it.',
                   ),
                 },
         },
