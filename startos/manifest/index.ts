@@ -15,7 +15,7 @@ export const manifest = setupManifest({
     // The bare version tag is the Apache build; `latest`/`fpm` ship no web
     // server.
     kimai: {
-      source: { dockerTag: 'kimai/kimai2:2.67.0' },
+      source: { dockerTag: 'kimai/kimai2:2.70.1' },
       arch: ['x86_64', 'aarch64'],
     },
     mysql: {
