@@ -12,7 +12,7 @@ const dict = {
   'Kimai is starting — the first start applies database migrations and can take several minutes': 7,
   Email: 8,
   'Kimai can send email': 9,
-  'No SMTP server configured. Kimai cannot send invoices or reports. Use the "Configure SMTP" action to enable it.': 10,
+  'No SMTP server configured. Kimai cannot send password-reset emails, invoices, or reports. Use the "Configure SMTP" action to enable it.': 10,
 
   // interfaces.ts
   'The Kimai web interface': 11,
@@ -31,7 +31,7 @@ const dict = {
 
   // actions/manageSmtp.ts
   'Configure SMTP': 19,
-  'Add SMTP credentials so Kimai can send invoices and reports.': 20,
+  'Add SMTP credentials so Kimai can send password-reset emails, invoices, and reports.': 20,
 } as const
 
 /**

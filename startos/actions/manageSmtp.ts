@@ -15,7 +15,7 @@ export const manageSmtp = sdk.Action.withInput(
   async () => ({
     name: i18n('Configure SMTP'),
     description: i18n(
-      'Add SMTP credentials so Kimai can send invoices and reports.',
+      'Add SMTP credentials so Kimai can send password-reset emails, invoices, and reports.',
     ),
     warning: null,
     allowedStatuses: 'any',
