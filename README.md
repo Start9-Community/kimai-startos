@@ -61,9 +61,9 @@ One, on the `startos` volume.
 | ----------- | ------------ | --------------------------------------------------------------------------------------- |
 | `storeJson` | `store.json` | `dbPassword`, `appSecret` (generated at install), `adminPassword` (set by an action), `smtp` (set by an action) |
 
-Kimai itself is configured entirely through environment variables that the package derives from `store.json` on every start: `DATABASE_URL`, `APP_SECRET`, `APP_ENV`, `TRUSTED_PROXIES`, `MAILER_URL` and `MAILER_FROM`. Nothing is written into Kimai's own config tree, and everything inside Kimai's admin UI — users, teams, customers, projects, rates, templates, plugins — belongs to the user and is never touched by the package.
+Kimai itself is configured entirely through environment variables that the package derives from `store.json` and from the Web Interface's own hostnames on every start: `DATABASE_URL`, `APP_SECRET`, `APP_ENV`, `TRUSTED_PROXIES`, `TRUSTED_HOSTS`, `MAILER_URL` and `MAILER_FROM`. Nothing is written into Kimai's own config tree, and everything inside Kimai's admin UI — users, teams, customers, projects, rates, templates, plugins — belongs to the user and is never touched by the package.
 
-`TRUSTED_PROXIES` is set to the private address ranges so Symfony honours the `X-Forwarded-Proto: https` header the StartOS reverse proxy adds; without it Kimai emits absolute `http://` URLs that the browser blocks as mixed content. `TRUSTED_HOSTS` is deliberately unset — StartOS serves the service on several addresses at once and pinning one would break the others.
+`TRUSTED_PROXIES` is set to the private address ranges so Symfony honours the `X-Forwarded-Proto: https` header the StartOS reverse proxy adds; without it Kimai emits absolute `http://` URLs that the browser blocks as mixed content. `TRUSTED_HOSTS` is every hostname currently enabled on the Web Interface — LAN addresses, `.local`, Tor and custom domains — each anchored and joined with `|`. Kimai's processor escapes that shape itself and rejects a `Host` header that is not on the list. Since Kimai 2.70 an empty list also disables self-service password reset, so the value is rebuilt, and the service restarted, whenever an address is added or removed. The image's Apache vhost does not pass the variable through to PHP, so the `kimai` daemon writes a `PassEnv TRUSTED_HOSTS` drop-in before handing off to the image entrypoint.
 
 ## Dependencies
 
@@ -133,9 +133,8 @@ A restored data directory differs from a fresh one: the SDK's restore creates on
 1. **The `admin` password is owned by StartOS.** It is re-applied on every start; change it with the Set Admin Password action, not inside Kimai. Other users' passwords are Kimai's own.
 2. **The `admin` account's email is the placeholder `admin@kimai.local`** until changed inside Kimai.
 3. **`DEFAULT_URI` cannot be set.** The image's Apache vhost passes a fixed list of variables through to PHP and this is not on it; only absolute URLs built outside a web request (some CLI-generated links) are affected.
-4. **`TRUSTED_HOSTS` is not set**, so host-header validation is not enforced at the application layer and Kimai disables self-service password-reset email even when SMTP is configured. The reset request returns HTTP 503. Recover `admin` with Set Admin Password; other users must contact a Kimai administrator.
-5. **The database password is alphanumeric by construction**, because the image's entrypoint splits `DATABASE_URL` on `/`, `:` and `@`.
-6. **LDAP and SAML are not configured** by the package, though the image ships support for them.
+4. **The database password is alphanumeric by construction**, because the image's entrypoint splits `DATABASE_URL` on `/`, `:` and `@`.
+5. **LDAP and SAML are not configured** by the package, though the image ships support for them.
 
 ---
 
@@ -157,6 +156,7 @@ startos_managed_env_vars:
   - APP_SECRET
   - DATABASE_URL
   - TRUSTED_PROXIES
+  - TRUSTED_HOSTS
   - MAILER_URL
   - MAILER_FROM
   - MYSQL_ROOT_PASSWORD

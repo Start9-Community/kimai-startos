@@ -25,8 +25,4 @@ The dashboard timer records time against a project and activity. Timesheets, cus
 ### Actions
 
 - **Set Admin Password** — generates a fresh password for `admin` and shows it once. Use it if you lose the password or want to rotate it. Kimai restarts to apply the change. The password of `admin` is managed here, not inside Kimai: a change made in Kimai's own profile page reverts the next time the service starts. Other users' passwords are managed inside Kimai.
-- **Configure SMTP** — lets Kimai send invoices and scheduled reports through your StartOS system SMTP settings or a custom provider. Until you do, the Email health check reads as disabled and those features do nothing.
-
-### Password recovery
-
-Self-service password-reset email is unavailable in this package, even with SMTP configured. Kimai requires an explicit trusted-host list for password-reset links; this package leaves it unset to support multiple service addresses. The password-reset page returns a service-unavailable error. Use **Set Admin Password** to recover `admin`; other users must contact a Kimai administrator.
+- **Configure SMTP** — lets Kimai send invoices and scheduled reports through your StartOS system SMTP settings or a custom provider. Until you do, the Email health check reads as disabled and those features do nothing. With SMTP configured, the password-reset link on the sign-in page emails a reset link for any user other than `admin`.
